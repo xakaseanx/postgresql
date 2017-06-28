@@ -138,3 +138,37 @@ service 'postgresql' do
 end
 
 include_recipe 'postgresql::server_conf'
+
+# Often, the postgresql service is not running or has died when 'assign-postgres-password' in
+#   server.rb is called which causes a lot of annoying problems.  This should ensure that the
+#   postgresql service is running before 'assign-postgres-password' is called.
+ruby_block 'wait for postgresql' do
+  block do
+    def postgresql_status
+      `service postgresql status`
+    end
+
+    def postgresql_status_message
+      puts "\nThe status of 'postgresql' is: #{postgresql_status}"
+    end
+
+    postgresql_tries = 0
+    postgresql_status_message
+
+    until ::File.exists?('/tmp/.s.PGSQL.5432')
+      if !postgresql_status.include?('running')
+        puts "Attempting to start 'postgresql'..."
+        `service postgresql start`
+        postgresql_tries += 1
+      end
+
+      sleep 10
+      postgresql_status_message
+
+      if postgresql_tries == 3
+        puts 'Unable to start the postgresql service.'
+        break
+      end
+    end
+  end
+end
